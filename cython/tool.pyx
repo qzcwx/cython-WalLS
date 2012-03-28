@@ -5,11 +5,11 @@ import numpy as np
 import math
 import sys
 
-argvCount = 1
+argvCount = 0
 
-def getArgv():
+def getArgv(argv):
     global argvCount
-    arg = sys.argv[argvCount]
+    arg = argv[argvCount]
     argvCount = argvCount + 1
     return arg
 
