@@ -36,8 +36,8 @@ cdef class Indiv:
 cdef class LocalSearch:
     #cdef np.ndarray sumArr
     cdef double* sumArr
+    cdef double** C
     cdef list improveA
-    cdef np.ndarray C
     cdef np.ndarray WAS
     cdef object func
     cdef object model
@@ -138,7 +138,7 @@ cdef class LocalSearch:
         next descent local search with respect to mean of neighs by Walsh Analysis
         """
         self.fitEval = 0
-        
+
         start = os.times()[0]
         self.model.transWal()
         self.oldindiv = initIndivNeigh(self.dim)
@@ -175,7 +175,7 @@ cdef class LocalSearch:
                     start = os.times()[0]
                     diff = self.walk(fitName, minimize, walkLen)
                     pertT = pertT + os.times()[0] - start
-                    
+
                     start = os.times()[0]
                     for i in diff:
                         self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[i] 
@@ -304,14 +304,14 @@ cdef class LocalSearch:
         """
         if not self.improveA:
             return False, None
-        
+
         cdef int I, bestI
 
 
         # randomly pick an improving move, which takes only constant time 
         I = random.choice(xrange(len(self.improveA)))
         bestI = self.improveA[I]
-                   
+
         return True, bestI
 
     def genImproveSC(self,minimize):
@@ -346,6 +346,7 @@ cdef class LocalSearch:
 
     def updateMeanNext(self, p, minimize):
         self.improveA.remove(p)
+
         if p in self.Inter:
             for i in self.Inter[p].arr:
                 if (minimize == True and self.SC[i] > self.threshold) or (minimize == False and self.SC[i]<self.threshold):
@@ -374,19 +375,26 @@ cdef class LocalSearch:
         4.
         initialize a dict of interaction structure, where interactive bits and the index of WAS (walsh including sign)
         """
+        cdef int i,j,k
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
 
+        self.C = <double **>malloc(sizeof(double *) * self.dim)
+
+        for i in xrange(self.dim) :
+            self.C[i] = <double *> malloc(sizeof(double) * self.dim)
 
         self.WAS = np.tile(Struct(arr = [], w = 0), len(self.model.w.keys()))# Walsh coefficients with sign, represented in Array
         self.lookup = dict()
         self.infectBit = dict()
-        self.C = np.zeros((self.dim,self.dim)) # coincidence matrix
         self.Inter = dict()
-        cdef int i
 
         for i in xrange(self.dim):
             self.sumArr[i] = 0
+        
+        for i in xrange(self.dim):
+            for j in xrange(self.dim):
+                self.C[i][j] = 0
 
         for i in xrange(len(self.model.WA)):
             W = int(math.pow(-1, binCount(self.model.WA[i].arr, self.oldindiv.bit))) * self.model.WA[i].w
@@ -412,11 +420,11 @@ cdef class LocalSearch:
                     else :
                         self.infectBit[j].append(Struct(arr=self.model.WA[i].arr, WI=i))
 
-            for j in comb: # for each list in comb
-                j0 = self.model.WA[i].arr[int(j[0])]
-                j1 = self.model.WA[i].arr[int(j[1])]
-                self.C[j0,j1] = self.C[j0,j1] + W
-        
+            for l in comb: # for each list in comb
+                j0 = self.model.WA[i].arr[int(l[0])]
+                j1 = self.model.WA[i].arr[int(l[1])]
+                self.C[j0][j1] = self.C[j0][j1] + W
+
 
     def initSC(self):
         # compute the SC array
@@ -458,15 +466,15 @@ cdef class LocalSearch:
             c = 0
             for i in range(N):
                 for j in [ k for k in range(N) if k > i]:
-                   arr = np.zeros(2)
-                   arr[0] = i
-                   arr[1] = j
-                   comb.append(arr)
-                   c = c + 1    
+                    arr = np.zeros(2)
+                    arr[0] = i
+                    arr[1] = j
+                    comb.append(arr)
+                    c = c + 1    
             self.lookup[N] = comb
             return comb
 
-    def update(self, int p):
+    def update(self, p):
         """
         By keeping track of coincidence matrix, 
         Cij stands for S_i(y_j) = S_i(x) - C_ij
@@ -480,11 +488,11 @@ cdef class LocalSearch:
         if p in self.Inter:
             for ii in self.Inter[p].arr:
                 if ii < p:
-                    self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii,p]
-                    self.C[ii,p] = - self.C[ii,p]
+                    self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii][p]
+                    self.C[ii][p] = - self.C[ii][p]
                 else:
-                    self.sumArr[ii] = self.sumArr[ii] - 2*self.C[p,ii]
-                    self.C[p,ii] = - self.C[p,ii]
+                    self.sumArr[ii] = self.sumArr[ii] - 2*self.C[p][ii]
+                    self.C[p][ii] = - self.C[p][ii]
 
         # update the rest of elements in C matrix
         if p in self.infectBit.keys():
@@ -495,7 +503,7 @@ cdef class LocalSearch:
                 for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
-                    self.C[k0,k1] = self.C[k0,k1] - 2 * self.WAS[i.WI].w
+                    self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[i.WI].w
 
     def updateImprS(self, int p, bool minimize):
         cdef int i,I
@@ -519,7 +527,7 @@ cdef class LocalSearch:
                         self.improveA.append(I)
                 elif I in self.improveA:
                     self.improveA.remove(I)
-        
+
         if (minimize == True and self.sumArr[p] > self.threshold) or (minimize == False and self.sumArr[p]< self.threshold ):
             if p not in self.improveA:
                 self.improveA.append(p)
@@ -529,7 +537,7 @@ cdef class LocalSearch:
     def updateWAS(self, int p):
         cdef int i, I
         if p in self.Inter:
-#            for i in xrange(len(self.Inter[p].WI)):
+            #            for i in xrange(len(self.Inter[p].WI)):
 #                I = self.Inter[p].WI[i]
 #                self.WAS[I].w = - self.WAS[I].w
             for i in self.Inter[p].WI:
@@ -630,7 +638,7 @@ cdef class LocalSearch:
         print all walsh terms with array representation
         """
         for i in range(len(self.model.WA)):
-           print self.model.WA[i].arr, self.model.WA[i].w
+            print self.model.WA[i].arr, self.model.WA[i].w
 
     def printC(self):
         a = 0
@@ -638,7 +646,7 @@ cdef class LocalSearch:
         for i in range(self.dim):
             for j in range(i+1,self.dim):
                 a = a + 1
-                if self.C[i,j] != 0:
+                if self.C[i][j] != 0:
                     print '1',
                     c = c + 1
                 else:
