@@ -19,6 +19,8 @@ import os
 import time
 import pdb
 from operator import itemgetter
+from cpython cimport bool
+from sets import Set
 
 class Struct:
     def __init__(self, **kwds):
@@ -425,7 +427,7 @@ cdef class LocalSearch:
         self.infectBit = dict()
         self.C = np.zeros((self.dim,self.dim)) # coincidence matrix
         self.Inter = dict()
-        cdef Py_ssize_t i
+        cdef int i
 
         for i in xrange(len(self.model.WA)):
             W = int(math.pow(-1, binCount(self.model.WA[i].arr, self.indiv.bit))) * self.model.WA[i].w
@@ -437,13 +439,13 @@ cdef class LocalSearch:
                 self.sumArr[j] = self.sumArr[j] + W
                 if len(self.model.WA[i].arr)>1: # for at least order Walsh terms
                     if j not in self.Inter: # the entry of i doesn't exist yet
-                        self.Inter[j] = Struct(arr=[], WI=[])
+                        #self.Inter[j] = Struct(arr=[], WI=[])
+                        self.Inter[j] = Struct(arr=Set(), WI=Set())
 
                     for k in self.model.WA[i].arr:
                         if k != j and k not in self.Inter[j].arr:
-                            self.Inter[j].arr.append(k)
-                    if i not in self.Inter[j].WI:
-                        self.Inter[j].WI.append(i)
+                            self.Inter[j].arr.add(k)
+                    self.Inter[j].WI.add(i)
 
                 # add list of order >= 3 Walsh terms for the purpose of updating C matrix
                 if len(self.model.WA[i].arr) >= 3:
@@ -524,22 +526,25 @@ cdef class LocalSearch:
             self.lookup[N] = comb
             return comb
 
-    def update(self, p):
+    def update(self, int p):
         """
         By keeping track of coincidence matrix, 
         Cij stands for S_i(y_j) = S_i(x) - C_ij
         partially update the Sum Array and self.WAS, given the bit which is changed
         """
         self.sumArr[p] = - self.sumArr[p]
+#        cdef int ii, k, k0, k1
+#        cdef object i
+#        cdef list arr
 
         if p in self.Inter:
-            for i in self.Inter[p].arr:
-                if i < p:
-                    self.sumArr[i] = self.sumArr[i] - 2*self.C[i,p]
-                    self.C[i,p] = - self.C[i,p]
+            for ii in self.Inter[p].arr:
+                if ii < p:
+                    self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii,p]
+                    self.C[ii,p] = - self.C[ii,p]
                 else:
-                    self.sumArr[i] = self.sumArr[i] - 2*self.C[p,i]
-                    self.C[p,i] = - self.C[p,i]
+                    self.sumArr[ii] = self.sumArr[ii] - 2*self.C[p,ii]
+                    self.C[p,ii] = - self.C[p,ii]
 
         # update the rest of elements in C matrix
         if p in self.infectBit.keys():
@@ -547,12 +552,12 @@ cdef class LocalSearch:
                 arr = i.arr[:]
                 arr.remove(p)
                 comb = self.genComb(len(arr))
-                for k in range(len(comb)):
+                for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
                     self.C[k0,k1] = self.C[k0,k1] - 2 * self.WAS[i.WI].w
 
-    def updateImprS(self, p, minimize):
+    def updateImprS(self, int p, bool minimize):
         self.improveA.remove(p)
         if p in self.Inter:
             for i in self.Inter[p].arr: 
@@ -562,7 +567,7 @@ cdef class LocalSearch:
                 elif i in self.improveA:
                     self.improveA.remove(i)
 
-    def updatePertImprS(self, p, minimize):
+    def updatePertImprS(self, int p, bool minimize):
         if p in self.Inter:
             for i in self.Inter[p].arr : 
                 if (minimize == True and self.sumArr[i] > self.threshold) or (minimize == False and self.sumArr[i]< self.threshold ):
@@ -577,12 +582,14 @@ cdef class LocalSearch:
         elif p in self.improveA:
             self.improveA.remove(p)
 
-    def updateWAS(self, Py_ssize_t p):
-        cdef Py_ssize_t i, I
+    def updateWAS(self, int p):
+        cdef int i, I
         if p in self.Inter:
-            for i in xrange(len(self.Inter[p].WI)):
-                I = self.Inter[p].WI[i]
-                self.WAS[I].w = - self.WAS[I].w
+#            for i in xrange(len(self.Inter[p].WI)):
+#                I = self.Inter[p].WI[i]
+#                self.WAS[I].w = - self.WAS[I].w
+            for i in self.Inter[p].WI:
+                self.WAS[i].w = - self.WAS[i].w
 
     def updateSC(self, p):
         self.SC[p] = - self.SC[p]
