@@ -1,3 +1,4 @@
+# cython: profile=True
 # Walsh Analysis Module
 import numpy as np
 def computeW(i,f):

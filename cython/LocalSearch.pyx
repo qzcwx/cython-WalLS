@@ -1,8 +1,4 @@
-""" 
-Local Search module:
-    This local search module gets the problem (in terms of objective function),
-    and return a solution found by hill climber
-"""
+# cython: profile=True
 
 import numpy as np
 cimport numpy as np
@@ -38,7 +34,8 @@ cdef class Indiv:
     cdef public double fit
 
 cdef class LocalSearch:
-    cdef np.ndarray sumArr
+    #cdef np.ndarray sumArr
+    cdef double* sumArr
     cdef list improveA
     cdef np.ndarray C
     cdef np.ndarray WAS
@@ -70,6 +67,17 @@ cdef class LocalSearch:
         """ 
         next descent local search running on S
         """
+        cdef: 
+            int initC = 1
+            float updateC = 0
+
+            float start = 0
+            float descT = 0
+            float pertT = 0
+            float updatePertT = 0
+            float updateT = 0
+            int walkLen = 10
+
         self.fitEval = 0
         start = os.times()[0]
         self.model.transWal()
@@ -82,15 +90,7 @@ cdef class LocalSearch:
         self.genImproveS(minimize)
         self.model.WA = []
 
-        initC = 1
-        updateC = 0
-
-        descT = 0
-        pertT = 0
-        updatePertT = 0
-        updateT = 0
         self.fitEval = 0
-        walkLen = 10
 
         initT = os.times()[0] - start
 
@@ -146,7 +146,7 @@ cdef class LocalSearch:
         self.indiv = copy.deepcopy(self.oldindiv)
         self.initWal()
         self.initSC()
-        self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sum(self.sumArr))
+        self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sumC(self.sumArr,self.dim))
         self.indiv.fitG = self.oldindiv.fitG
         self.genImproveSC(minimize)
         self.bsf = copy.deepcopy(self.oldindiv)
@@ -179,7 +179,7 @@ cdef class LocalSearch:
                     start = os.times()[0]
                     for i in diff:
                         self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[i] 
-                        self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (np.sum(self.sumArr))
+                        self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sumC(self.sumArr, self.dim))
 
                         self.update(i)
                         self.updateSC(i)
@@ -193,7 +193,7 @@ cdef class LocalSearch:
             else : # improveN is TRUE 
                 start = os.times()[0]
                 self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[bestI] 
-                self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (np.sum(self.sumArr))
+                self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sumC(self.sumArr,self.im))
                 self.update(bestI)
                 self.updateSC(bestI)
                 self.updateWAS(bestI)
@@ -374,13 +374,19 @@ cdef class LocalSearch:
         4.
         initialize a dict of interaction structure, where interactive bits and the index of WAS (walsh including sign)
         """
-        self.sumArr = np.zeros(self.dim)
+        #self.sumArr = np.zeros(self.dim)
+        self.sumArr = <double*>malloc(self.dim * sizeof(double))
+
+
         self.WAS = np.tile(Struct(arr = [], w = 0), len(self.model.w.keys()))# Walsh coefficients with sign, represented in Array
         self.lookup = dict()
         self.infectBit = dict()
         self.C = np.zeros((self.dim,self.dim)) # coincidence matrix
         self.Inter = dict()
         cdef int i
+
+        for i in xrange(self.dim):
+            self.sumArr[i] = 0
 
         for i in xrange(len(self.model.WA)):
             W = int(math.pow(-1, binCount(self.model.WA[i].arr, self.oldindiv.bit))) * self.model.WA[i].w
@@ -703,4 +709,12 @@ cpdef int binCount(list arr,str bit):
     for i in arr:
         if bit[i] == '1':
             s = s + 1
+    return s
+
+cdef double sumC(double * a, int d):
+    cdef double s = 0
+
+    for i in xrange(d):
+        s = s+a[i]
+
     return s

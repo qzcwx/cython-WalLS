@@ -1,3 +1,4 @@
+# cython: profile=True
 import nkLandscape as nk
 import nkqLandscape as nkq
 import WalshAnalysis as wal

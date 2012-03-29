@@ -1,3 +1,4 @@
+# cython: profile=True
 import nkLandscape as nk
 import tool as tl
 import random
