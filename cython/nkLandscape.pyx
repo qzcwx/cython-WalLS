@@ -1,14 +1,12 @@
-# generate NK-landscapes instances
-## the encoding is in right to left fashion
-## 00-0, 01-1, 10-2, 11-3 import WalshAnalysis as wal import random import numpy as np import math
-
+""" 
+NK landscape module:
+"""
 import random
 import WalshAnalysis as wal
 import numpy as np
 import tool as tl
 import math
 import pdb
-
 
 class NKLandscape:
     """ NK-landscape class """

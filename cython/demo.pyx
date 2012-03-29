@@ -38,8 +38,7 @@ def main(argv):
     inst = int(tl.getArgv(argv))
     s = tl.getArgv(argv) # get the setting for population size
     n = int(tl.getArgv(argv))
-    if probName != 'SAT':
-        k = int(tl.getArgv(argv))
+    k = int(tl.getArgv(argv))
 
     #maxFit = 1 * n
     maxFit = 100 * n
@@ -57,23 +56,11 @@ def main(argv):
         model = nkq.NKQLandcape(n, k, q, prefixNKQ+'NKQ-N'+str(n)+'-K'+str(k)+'-I'+str(inst)+'-Q'+str(q))
         #model = nkq.NKQLandcape(n, k, q)
 
-    if compMeth == 'walWalk' or compMeth == 'walRest' or compMeth == 'supm' or compMeth == 'bitImp' or compMeth == 'walSearch' or compMeth == 'checkOptWal' or compMeth == 'checkHyper' or compMeth == 'checkHyperRank' or compMeth == 'hyperSearch' or compMeth == 'hyperSqSearch' or compMeth == 'hyperWalSearch' or compMeth == 'walWalkNext' or compMeth == 'walRestNext':
+    if  compMeth == 'walWalkNext' or compMeth == 'walRestNext':
         start = os.times()[0]
         # Walsh analysis
         w = model.WalshCofLinearLinklist()
         walTime = os.times()[0] - start
-
-        start = os.times()[0]
-        if compMeth == 'checkHyper' or compMeth == 'checkHyperRank' or compMeth == 'hyperSearch':
-            model.genHyperVote()
-        elif compMeth == 'hyperSqSearch':
-            model.genHyperSqVote()
-        elif compMeth == 'hyperWalSearch':
-            model.genHyperWalVote()
-        hyperTime = os.times()[0] - start
-
-        # count the number of interative bits
-        # model.countInterBits()
 
         """ store runtime to files """
         if probName == 'NKQ':
@@ -81,35 +68,12 @@ def main(argv):
         elif probName == 'NK':
             nameOfF = waltimeDir+probName+'-'+algoName+'-F'+fitName+'-C'+compMeth+'-I'+str(inst)+'-S'+str(s)+'-N'+str(n)+'-K'+str(k)+'.txt'
 
-        f = open(nameOfF, 'w')
-        print >>f,"%g\t%g" % (walTime,hyperTime) 
-        f.close()
-
-#    bit,fit = tl.compFit(model)
-#    a = sorted(zip(bit,fit), key=lambda a_entry: a_entry[1]) 
-#    print 'opti\n', a[0][0], a[0][1]
-#    print
-
-#    for i in a:
-#        print i[0], '%.2f' %(i[1])
-
-#    for i in zip(bit,fit):
-#        print i[0],'%.3f' %(i[1])
-        
-#    print 'bit',bit
-#    print 'fit',fit
-#    print 'mean',np.mean(fit)
-#    print 'w', w
-
-#    numOpt = lo.localOpt(bit, fit)
-#    print numOpt
 
     if algoName.find('LS') != -1:
         algo = ls.LocalSearch(model, maxFit, n)
 
     tAll = np.zeros(runs)
     for i in range(runs):
-#        print 'run', i, ':probName', probName, 'algoName', algoName, 'fitName', fitName, 'I', inst, 'n', n, 'k', k 
         start = os.times()[0]
         if algoName == 'LS':
             res.append(algo.run(fitName, minimize = True, restart = False,compM = compMeth ))
@@ -117,14 +81,6 @@ def main(argv):
             res.append(algo.run(fitName, minimize = True, restart = True,compM = compMeth))
         tAll[i] = os.times()[0] - start
 
-#    trace = res[0]['trace']
-#    for i in trace:
-##        print 'Eval', i.fitEval, 'fit', i.fit
-#        print 'Eval', i.fitEval, 'fit', i.fit, 'fitG', i.fitG
-#
-#    plt.plot([i.fitEval for i in trace],[i.fit for i in trace],'.-')
-#    plt.plot([i.fitEval for i in trace],[i.fitG for i in trace],'.-')
-#    plt.show()
 
     """ store results to files """
     if probName == 'NKQ':
@@ -132,11 +88,6 @@ def main(argv):
     elif probName == 'NK':
         nameOfF = nameOfDir+probName+'-'+algoName+'-F'+fitName+'-C'+compMeth+'-I'+str(inst)+'-S'+str(s)+'-N'+str(n)+'-K'+str(k)+'.txt'
 
-#    """ print the mean over multiple runs """
-#    r = np.zeros(runs)
-#    for i in range(runs):
-#        r[i] = res[i]['sol']
-#    print np.mean(r)
     f = open(nameOfF, 'w')
     for i in range(runs):
         if fitName != 'fit':

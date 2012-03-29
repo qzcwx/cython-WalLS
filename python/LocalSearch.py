@@ -28,6 +28,7 @@ class Struct:
 class LocalSearch:
     def __init__(self, model, MaxFit, dim):
         self.func = model.compFit
+        print(type(self.func))
         self.model = model
         self.MaxFit = MaxFit
         self.dim = dim
