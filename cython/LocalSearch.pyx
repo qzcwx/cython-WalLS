@@ -37,7 +37,6 @@ cdef class LocalSearch:
     cdef double threshold
     cdef int fitEval
     cdef object oldindiv, indiv, bsf
-
     def __init__(self,object model,int MaxFit,int dim):
         self.func = model.compFit
         self.model = model
