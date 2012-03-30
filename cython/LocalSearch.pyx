@@ -33,8 +33,12 @@ cdef class Indiv:
     cdef public char* bit
     cdef public double fit
 
+cdef class InfBit:
+    cdef public list arr
+    cdef public int WI
+
 cdef class LocalSearch:
-    #cdef np.ndarray sumArr
+    cdef list infectBit
     cdef double* sumArr
     cdef double** C
     cdef list improveA
@@ -46,7 +50,7 @@ cdef class LocalSearch:
     cdef double threshold
     cdef int fitEval
 
-    cdef dict lookup, infectBit, Inter
+    cdef dict lookup, Inter
     cdef Indiv oldindiv, bsf
 
     def __init__(self,object model,int MaxFit,int dim):
@@ -368,14 +372,15 @@ cdef class LocalSearch:
         2. 
         initialize a full matrix, Coincidence, C_ij, which is a symmetric one, and diagonal is empty (as we don't want to recompute SumArr), empty whenever i >= j.
         Two options for implementing C matrix
-            a. precompute C matrix 
+            a. pre-compute C matrix 
             b. construct it on the fly using dict()
         3. 
         initialize interaction list for each variable
         4.
-        initialize a dict of interaction structure, where interactive bits and the index of WAS (walsh including sign)
+        initialize a dict() of interaction structure, where interactive bits and the index of WAS (walsh including sign)
         """
         cdef int i,j,k
+        cdef InfBit infBit
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
 
@@ -386,11 +391,13 @@ cdef class LocalSearch:
 
         self.WAS = np.tile(Struct(arr = [], w = 0), len(self.model.w.keys()))# Walsh coefficients with sign, represented in Array
         self.lookup = dict()
-        self.infectBit = dict()
         self.Inter = dict()
 
         for i in xrange(self.dim):
+            # initialize sumArr
             self.sumArr[i] = 0
+
+        self.infectBit = [[] for i in range(self.dim)]
         
         for i in xrange(self.dim):
             for j in xrange(self.dim):
@@ -415,10 +422,13 @@ cdef class LocalSearch:
 
                 # add list of order >= 3 Walsh terms for the purpose of updating C matrix
                 if len(self.model.WA[i].arr) >= 3:
-                    if j not in self.infectBit: 
-                        self.infectBit[j] = [Struct(arr=self.model.WA[i].arr, WI=i)]
+                    infBit = InfBit()
+                    infBit.arr = self.model.WA[i].arr
+                    infBit.WI = i
+                    if not self.infectBit[j]: 
+                        self.infectBit[j] = [infBit]
                     else :
-                        self.infectBit[j].append(Struct(arr=self.model.WA[i].arr, WI=i))
+                        self.infectBit[j].append(infBit)
 
             for l in comb: # for each list in comb
                 j0 = self.model.WA[i].arr[int(l[0])]
@@ -495,7 +505,7 @@ cdef class LocalSearch:
                     self.C[p][ii] = - self.C[p][ii]
 
         # update the rest of elements in C matrix
-        if p in self.infectBit.keys():
+        if not self.infectBit[p]:
             for i in self.infectBit[p]:
                 arr = i.arr[:]
                 arr.remove(p)
@@ -537,9 +547,6 @@ cdef class LocalSearch:
     def updateWAS(self, int p):
         cdef int i, I
         if p in self.Inter:
-            #            for i in xrange(len(self.Inter[p].WI)):
-#                I = self.Inter[p].WI[i]
-#                self.WAS[I].w = - self.WAS[I].w
             for i in self.Inter[p].WI:
                 self.WAS[i].w = - self.WAS[i].w
 
@@ -708,7 +715,7 @@ def initIndivNeigh(int dim):
     indiv = Struct( fit = 0, fitG = 0, bit = randBitStr)
     return indiv
 
-cpdef int binCount(list arr,str bit):
+cdef int binCount(list arr,str bit):
     """
     count the one bit of union self.model.WA[i].arr and bit
     """
