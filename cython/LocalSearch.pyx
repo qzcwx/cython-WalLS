@@ -37,12 +37,16 @@ cdef class InfBit:
     cdef public list arr
     cdef public int WI
 
+cdef class InTer:
+    cdef public list arr
+    cdef public list WI
+
 cdef class Was:
     cdef public list arr
     cdef public double w
 
 cdef class LocalSearch:
-    cdef list infectBit
+    cdef list infectBit, Inter
     cdef double* sumArr
     cdef double** C
     cdef list improveA
@@ -54,7 +58,7 @@ cdef class LocalSearch:
     cdef int fitEval
     cdef np.ndarray WAS
 
-    cdef dict lookup, Inter
+    cdef dict lookup
     cdef Indiv oldindiv, bsf
 
     def __init__(self,object model,int MaxFit,int dim):
@@ -385,6 +389,7 @@ cdef class LocalSearch:
         """
         cdef int i,j,k
         cdef InfBit infBit
+        cdef InTer inter 
         cdef Was was
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
@@ -397,18 +402,17 @@ cdef class LocalSearch:
         #self.WAS = np.tile(Struct(arr = [], w = 0), len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
         self.WAS = np.tile(Was, len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
         self.lookup = dict()
-        self.Inter = dict()
 
         for i in xrange(self.dim):
             # initialize sumArr
             self.sumArr[i] = 0
 
         self.infectBit = [[] for i in range(self.dim)]
+        self.Inter = [[] for i in range(self.dim)]
         
         for i in xrange(self.dim):
             for j in xrange(self.dim):
                 self.C[i][j] = 0
-
         for i in xrange(len(self.model.WA)):
             W = int(math.pow(-1, binCount(self.model.WA[i].arr, self.oldindiv.bit))) * self.model.WA[i].w
             #self.WAS[i] = Struct(arr = self.model.WA[i].arr, w = W)
@@ -420,13 +424,15 @@ cdef class LocalSearch:
             for j in self.model.WA[i].arr:
                 self.sumArr[j] = self.sumArr[j] + W
                 if len(self.model.WA[i].arr)>1: # for at least order Walsh terms
-                    if j not in self.Inter: # the entry of i doesn't exist yet
-                        self.Inter[j] = Struct(arr=[], WI=[])
+                    if not self.Inter[j]: # the entry of i doesn't exist yet
+                        self.Inter[j] = InTer()
+                        self.Inter[j].arr = []
+                        self.Inter[j].WI = []
 
                     for k in self.model.WA[i].arr:
                         if k != j and k not in self.Inter[j].arr:
                             self.Inter[j].arr.append(k)
-                    if i not in self.Inter[j].WI:
+                    if  i not in self.Inter[j].WI:
                         self.Inter[j].WI.append(i)
 
                 # add list of order >= 3 Walsh terms for the purpose of updating C matrix
@@ -500,13 +506,13 @@ cdef class LocalSearch:
         partially update the Sum Array and self.WAS, given the bit which is changed
         """
         self.sumArr[p] = - self.sumArr[p]
-        cdef int ii, k, k0, k1
-        cdef int i
+        cdef int k, k0, k1, i, ii
         cdef InfBit I
         cdef list arr, comb
 
-        if p in self.Inter:
-            for ii in self.Inter[p].arr:
+        if self.Inter[p]:
+            for i in xrange(len(self.Inter[p].arr)):
+                ii = self.Inter[p].arr[i]
                 if ii < p:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii][p]
                     self.C[ii][p] = - self.C[ii][p]
@@ -529,7 +535,7 @@ cdef class LocalSearch:
     def updateImprS(self, int p, bool minimize):
         cdef int i,I
         self.improveA.remove(p)
-        if p in self.Inter:
+        if  self.Inter[p]:
             for i in xrange(len(self.Inter[p].arr)): 
                 I = self.Inter[p].arr[i]
                 if (minimize == True and self.sumArr[I] > self.threshold) or (minimize == False and self.sumArr[I]< self.threshold ):
@@ -540,7 +546,7 @@ cdef class LocalSearch:
 
     def updatePertImprS(self, int p, bool minimize):
         cdef int i,I
-        if p in self.Inter:
+        if  self.Inter[p]:
             for i in xrange(len(self.Inter[p].arr)): 
                 I = self.Inter[p].arr[i]
                 if (minimize == True and self.sumArr[I] > self.threshold) or (minimize == False and self.sumArr[I]< self.threshold ):
@@ -557,7 +563,7 @@ cdef class LocalSearch:
 
     def updateWAS(self, int p):
         cdef int i, I
-        if p in self.Inter:
+        if self.Inter[p]:
             for i in self.Inter[p].WI:
                 self.WAS[i].w = - self.WAS[i].w
 
