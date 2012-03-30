@@ -37,18 +37,22 @@ cdef class InfBit:
     cdef public list arr
     cdef public int WI
 
+cdef class Was:
+    cdef public list arr
+    cdef public double w
+
 cdef class LocalSearch:
     cdef list infectBit
     cdef double* sumArr
     cdef double** C
     cdef list improveA
-    cdef np.ndarray WAS
     cdef object func
     cdef object model
     cdef int MaxFit
     cdef int dim
     cdef double threshold
     cdef int fitEval
+    cdef np.ndarray WAS
 
     cdef dict lookup, Inter
     cdef Indiv oldindiv, bsf
@@ -381,6 +385,7 @@ cdef class LocalSearch:
         """
         cdef int i,j,k
         cdef InfBit infBit
+        cdef Was was
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
 
@@ -389,7 +394,8 @@ cdef class LocalSearch:
         for i in xrange(self.dim) :
             self.C[i] = <double *> malloc(sizeof(double) * self.dim)
 
-        self.WAS = np.tile(Struct(arr = [], w = 0), len(self.model.w.keys()))# Walsh coefficients with sign, represented in Array
+        #self.WAS = np.tile(Struct(arr = [], w = 0), len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
+        self.WAS = np.tile(Was, len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
         self.lookup = dict()
         self.Inter = dict()
 
@@ -405,7 +411,10 @@ cdef class LocalSearch:
 
         for i in xrange(len(self.model.WA)):
             W = int(math.pow(-1, binCount(self.model.WA[i].arr, self.oldindiv.bit))) * self.model.WA[i].w
-            self.WAS[i] = Struct(arr = self.model.WA[i].arr, w = W)
+            #self.WAS[i] = Struct(arr = self.model.WA[i].arr, w = W)
+            self.WAS[i] = Was()
+            self.WAS[i].arr = self.model.WA[i].arr
+            self.WAS[i].w = W
             comb = self.genComb(len(self.model.WA[i].arr))
 
             for j in self.model.WA[i].arr:
@@ -493,7 +502,7 @@ cdef class LocalSearch:
         self.sumArr[p] = - self.sumArr[p]
         cdef int ii, k, k0, k1
         cdef object i
-        cdef list arr
+        cdef list arr, comb
 
         if p in self.Inter:
             for ii in self.Inter[p].arr:
@@ -571,7 +580,7 @@ cdef class LocalSearch:
                 arr.remove(p)
                 lenArr = len(arr)
                 comb = self.genComb(lenArr)
-                for k in range(len(comb)):
+                for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
                     self.orderC[k0,k1] = self.orderC[k0,k1] - 2 * (lenArr + 1)* self.WAS[i.WI].w
