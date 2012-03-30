@@ -505,7 +505,7 @@ cdef class LocalSearch:
                     self.C[p][ii] = - self.C[p][ii]
 
         # update the rest of elements in C matrix
-        if not self.infectBit[p]:
+        if self.infectBit[p]:
             for i in self.infectBit[p]:
                 arr = i.arr[:]
                 arr.remove(p)
