@@ -501,7 +501,8 @@ cdef class LocalSearch:
         """
         self.sumArr[p] = - self.sumArr[p]
         cdef int ii, k, k0, k1
-        cdef object i
+        cdef int i
+        cdef InfBit I
         cdef list arr, comb
 
         if p in self.Inter:
@@ -515,14 +516,15 @@ cdef class LocalSearch:
 
         # update the rest of elements in C matrix
         if self.infectBit[p]:
-            for i in self.infectBit[p]:
-                arr = i.arr[:]
+            for i in xrange(len(self.infectBit[p])):
+                I = self.infectBit[p][i]
+                arr = I.arr[:]
                 arr.remove(p)
                 comb = self.genComb(len(arr))
                 for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
-                    self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[i.WI].w
+                    self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[I.WI].w
 
     def updateImprS(self, int p, bool minimize):
         cdef int i,I
