@@ -122,6 +122,8 @@ def main(argv):
 
     print nameOfF, 'Finish'
     print
+    
+    tl.argvCount = 0
 
 if __name__ == '__main__':
     main(sys.argv)

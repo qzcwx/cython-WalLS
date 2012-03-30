@@ -2,7 +2,6 @@
 
 import numpy as np
 cimport numpy as np
-#import matplotlib.pyplot as plt
 import WalshAnalysis as wal
 import itertools as it
 import tool as tl
@@ -16,6 +15,7 @@ import time
 import pdb
 from operator import itemgetter
 from cpython cimport bool
+from cython.parallel import prange, parallel, threadid
 
 # standard cimport file libc/stdlib.pxd
 
