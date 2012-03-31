@@ -15,6 +15,7 @@ import time
 import pdb
 from operator import itemgetter
 from cpython cimport bool
+cimport cython
 from cython.parallel import prange, parallel, threadid
 
 # standard cimport file libc/stdlib.pxd
@@ -499,20 +500,28 @@ cdef class LocalSearch:
             self.lookup[N] = comb
             return comb
 
-    def update(self, p):
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def update(self,int p):
         """
         By keeping track of coincidence matrix, 
         Cij stands for S_i(y_j) = S_i(x) - C_ij
         partially update the Sum Array and self.WAS, given the bit which is changed
         """
         self.sumArr[p] = - self.sumArr[p]
-        cdef int k, k0, k1, i, ii
+        #cdef int k, k0, k1, i, ii, len1, len2
+        cdef int k, k0, k1, ii, len1, len2
         cdef InfBit I
         cdef list arr, comb
+        cdef np.ndarray[np.int64_t, ndim=1] InterArr
 
         if self.Inter[p]:
-            for i in xrange(len(self.Inter[p].arr)):
-                ii = self.Inter[p].arr[i]
+            #for i in prange(len(self.Inter[p].arr), nogil= True):
+            len1 = len(self.Inter[p].arr)
+            InterArr =  np.asarray(self.Inter[p].arr)
+            #for i in prange(len1, nogil= True, schedule='guided'):
+            for i in xrange(len1):
+                ii = InterArr[i] 
                 if ii < p:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii][p]
                     self.C[ii][p] = - self.C[ii][p]
@@ -522,7 +531,9 @@ cdef class LocalSearch:
 
         # update the rest of elements in C matrix
         if self.infectBit[p]:
-            for i in xrange(len(self.infectBit[p])):
+            len2 = len(self.infectBit[p])
+            #for i in prange(len2, nogil= True):
+            for i in xrange(len2):
                 I = self.infectBit[p][i]
                 arr = I.arr[:]
                 arr.remove(p)
