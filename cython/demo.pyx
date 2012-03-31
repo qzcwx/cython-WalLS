@@ -76,11 +76,13 @@ def main(argv):
     tAll = np.zeros(runs)
     for i in range(runs):
         start = time.time()
+        #start = os.times()[0]
         if algoName == 'LS':
             res.append(algo.run(fitName, minimize = True, restart = False,compM = compMeth ))
         elif algoName == 'rLS':
             res.append(algo.run(fitName, minimize = True, restart = True,compM = compMeth))
         tAll[i] = time.time() - start
+        #tAll[i] = os.times()[0] - start
 
 
     """ store results to files """
