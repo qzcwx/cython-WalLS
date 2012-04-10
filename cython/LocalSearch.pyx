@@ -24,7 +24,6 @@ cdef extern from "stdlib.h":
     void free(void* ptr)
     void* malloc(size_t size)
     void* realloc(void* ptr, size_t size)
-    # ...
 
 class Struct:
     def __init__(self, **kwds):
@@ -58,7 +57,6 @@ cdef class LocalSearch:
     cdef double threshold
     cdef int fitEval
     cdef np.ndarray WAS
-
     cdef dict lookup
     cdef Indiv oldindiv, bsf
 
@@ -514,17 +512,17 @@ cdef class LocalSearch:
         #cdef int len1, len2
         cdef InfBit I
         cdef list arr, comb
-#        cdef np.ndarray[np.int64_t, ndim=1] InterArr
+        cdef np.ndarray[np.int64_t, ndim=1] InterArr
 
         if self.Inter[p]:
             #for i in prange(len(self.Inter[p].arr), nogil= True):
-#            len1 = len(self.Inter[p].arr)
-#            InterArr =  np.asarray(self.Inter[p].arr)
-            #for i in prange(len1, nogil= True, schedule='guided'):
+            len1 = len(self.Inter[p].arr)
+            InterArr =  np.asarray(self.Inter[p].arr)
+            for i in prange(len1, nogil= True, schedule='guided'):
             #for i in xrange(len1):
-            for i in xrange(len(self.Inter[p].arr)):
-                #ii = InterArr[i] 
-                ii = self.Inter[p].arr[i] 
+            #for i in xrange(len(self.Inter[p].arr)):
+                ii = InterArr[i] 
+                #ii = self.Inter[p].arr[i] 
                 if ii < p:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii][p]
                     self.C[ii][p] = - self.C[ii][p]
