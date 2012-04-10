@@ -508,17 +508,17 @@ cdef class LocalSearch:
         """
         self.sumArr[p] = - self.sumArr[p]
         #cdef int k, k0, k1, i, ii, len1, len2
+        cdef int i
         cdef int k, k0, k1, ii
         #cdef int len1, len2
-        cdef InfBit I
-        cdef list arr, comb
+        cdef list comb
         cdef np.ndarray[np.int64_t, ndim=1] InterArr
 
         if self.Inter[p]:
             #for i in prange(len(self.Inter[p].arr), nogil= True):
             len1 = len(self.Inter[p].arr)
             InterArr =  np.asarray(self.Inter[p].arr)
-            for i in prange(len1, nogil= True, schedule='guided'):
+            for i in prange(len1, nogil= True):
             #for i in xrange(len1):
             #for i in xrange(len(self.Inter[p].arr)):
                 ii = InterArr[i] 
@@ -529,6 +529,12 @@ cdef class LocalSearch:
                 else:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[p][ii]
                     self.C[p][ii] = - self.C[p][ii]
+        self.updateDeep(p)
+
+    def updateDeep(self, int p):
+        cdef int i
+        cdef list arr
+        cdef InfBit I
 
         # update the rest of elements in C matrix
         if self.infectBit[p]:
