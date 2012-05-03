@@ -133,6 +133,7 @@ cdef class LocalSearch:
                     for i in diff:
                         self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[i]
                         self.update(i)
+                        self.updateDeep(i)
                         self.updateWAS(i)
                         #print 'BEGIN: updatePertImprS'
                         self.updatePertImprS(i, minimize)
@@ -150,6 +151,7 @@ cdef class LocalSearch:
                 self.update(bestI)
 #                print 'END  : update'
 #                print 'BEGIN: updateWAS'
+                self.updateDeep(bestI)
                 self.updateWAS(bestI)
 #                print 'END  : updateWAS'
 #                print 'BEGIN: updateImprS'
@@ -531,7 +533,6 @@ cdef class LocalSearch:
             
 
 #        print 'BEGIN: updateDeep'
-        self.updateDeep(p)
 #        print 'END  : updateDeep'
 
     def updateDeep(self, int p):
