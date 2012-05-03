@@ -36,10 +36,6 @@ ctypedef struct InfBit:
     vector[int]* arr
     int WI
 
-#cdef class InTer:
-#    cdef public list arr
-#    cdef public list WI
-
 ctypedef struct InTer:
     set[int]* arr
     set[int]* WI
@@ -49,7 +45,6 @@ ctypedef struct Was:
     double w
 
 cdef class LocalSearch:
-    #cdef list Inter
     cdef InTer** Inter
     cdef vector[InfBit]** infectBit
     cdef Was* WAS
@@ -244,14 +239,7 @@ cdef class LocalSearch:
 #
 #        return {'nEvals': self.fitEval, 'sol': self.bsf.fit, 'fitG': self.bsf.fitG, 'bit':self.bsf.bit,'init':initT, 'descT':descT, 'pertT':pertT, 'updateT':updateT, 'updatePertT':updatePertT, 'initC':initC, 'updateC':updateC}
 
-    def diffBits(self, a, b):
-        diff = []
-        for i in xrange(self.dim):
-            if a[i] != b[i]:
-                diff.append(i)
-        return diff
-
-    def walk(self, fitName, minimize, length):
+    cdef walk(self, fitName, minimize, length):
         # update the bsf solution
         if fitName == 'fit' and minimize == True :
             if self.bsf.fit > self.oldindiv.fit:
@@ -300,30 +288,7 @@ cdef class LocalSearch:
         self.fitEval = self.fitEval + 1
         return indiv
 
-    def evalPopNeigh(self, indiv, fitName, minimize):
-        """ evaluate the individual itself """
-        indiv.fit = self.func(indiv.bit)
-        self.fitEval = self.fitEval + 1
-        """ evaluate all neighborhood """
-        fitN = np.zeros(self.dim)
-        for j in range(self.dim):
-            # flip the jth bit in bit-string
-            neighStr = np.copy(indiv.bit)
-            if neighStr[j] == '1':
-                neighStr[j] = '0'
-            else:
-                neighStr[j] = '1'
-            fitN[j] = self.func(neighStr)
-        if fitName == 'mean':
-            indiv.fitG = np.mean(fitN)
-        elif minimize == True :
-            indiv.fitG = np.mean(fitN) - np.std(fitN)
-        elif minimize == False :
-            indiv.fitG = np.mean(fitN) + np.std(fitN)
-
-        return copy.deepcopy(indiv)
-
-    def genImproveS(self,minimize):
+    cdef genImproveS(self,minimize):
         """
         generate the index of best neigh according to sumArr only (surrogate of fitness)
         """
@@ -333,7 +298,7 @@ cdef class LocalSearch:
             if (minimize == True and self.sumArr[i] > self.threshold) or (minimize == False and self.sumArr[i]<-self.threshold):
                 self.improveA.append(i) 
 
-    def nextDesc(self):
+    cdef nextDesc(self):
         """
         find the next improving move by the similar update trick
         """
@@ -479,10 +444,31 @@ cdef class LocalSearch:
 
 
 
-    def genComb(self,N):
+#    def genComb(self,N):
+#        """ 
+#        Generate C_k^0 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
+#        """
+#        if N in self.lookup.keys(): # the key exists before
+#            return self.lookup[N]
+#        else : 
+#            comb =  []
+#            c = 0
+#            for i in range(N):
+#                for j in [ k for k in range(N) if k > i]:
+#                    arr = np.zeros(2)
+#                    arr[0] = i
+#                    arr[1] = j
+#                    comb.append(arr)
+#                    c = c + 1    
+#            self.lookup[N] = comb
+#            return comb
+
+    cdef genComb(self,N):
         """ 
         Generate C_k^0 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
         """
+        cdef int c, a, j
+
         if N in self.lookup.keys(): # the key exists before
             return self.lookup[N]
         else : 
@@ -530,7 +516,6 @@ cdef class LocalSearch:
                 inc(it)
             
 
-    @cython.wraparound(False)
     cdef updateDeep(self, int p):
         cdef int i, k0, k1
         cdef vector[int].iterator it
@@ -616,7 +601,7 @@ cdef class LocalSearch:
         elif p in self.improveA:
             self.improveA.remove(p)
 
-    def updateWAS(self, int p):
+    cdef updateWAS(self, int p):
         cdef int i, I
         cdef set[int].iterator it
 
