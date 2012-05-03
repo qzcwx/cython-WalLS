@@ -20,6 +20,8 @@ from cython.parallel import prange, parallel, threadid
 
 from libcpp.vector cimport vector
 from libcpp.set cimport set
+from libcpp.map cimport map
+from libcpp.pair cimport pair
 from libc.stdlib cimport malloc
 from cython.operator cimport dereference as deref, preincrement as inc
 
@@ -44,6 +46,10 @@ ctypedef struct Was:
     int* arr
     double w
 
+ctypedef struct ComArr:
+    int** arr
+    int size
+
 cdef class LocalSearch:
     cdef InTer** Inter
     cdef vector[InfBit]** infectBit
@@ -57,7 +63,8 @@ cdef class LocalSearch:
     cdef int dim
     cdef double threshold
     cdef int fitEval
-    cdef dict lookup
+    #cdef dict lookup
+    cdef map[int,ComArr*]* lookup
     cdef Indiv oldindiv, bsf
 
     def __init__(self,object model,int MaxFit,int dim):
@@ -67,14 +74,14 @@ cdef class LocalSearch:
         self.dim = dim
         self.threshold = 1e-15
 
-    def run(self, fitName, minimize, restart, compM):
+    cpdef run(self, fitName, minimize, restart, compM):
         if compM == 'walWalkNext':
             if fitName == 'fit':
                 return self.runFitSwalkNext(fitName, minimize, restart)
 #            elif fitName == 'mean':
 #                return self.runMeanSCwalkNext(fitName, minimize, restart)
 
-    def runFitSwalkNext(self,fitName, minimize, restart):
+    cdef runFitSwalkNext(self,fitName, minimize, restart):
         """ 
         next descent local search running on S
         """
@@ -164,81 +171,6 @@ cdef class LocalSearch:
         return {'nEvals': self.fitEval, 'sol': self.bsf.fit, 'bit':self.bsf.bit, 'init':initT, 'descT':descT, 'pertT':pertT, 'updateT':updateT, 'updatePertT':updatePertT, 'initC':initC, 'updateC':updateC}
 
 
-#    def runMeanSCwalkNext(self,fitName, minimize, restart):
-#        """ 
-#        next descent local search with respect to mean of neighs by Walsh Analysis
-#        """
-#        self.fitEval = 0
-#
-#        start = os.times()[0]
-#        self.model.transWal()
-#        self.oldindiv = initIndivNeigh(self.dim)
-#        self.oldindiv = self.evalPop(self.oldindiv)
-#        self.indiv = copy.deepcopy(self.oldindiv)
-#        self.initWal()
-#        self.initSC()
-#        self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sumC(self.sumArr,self.dim))
-#        self.indiv.fitG = self.oldindiv.fitG
-#        self.genImproveSC(minimize)
-#        self.bsf = copy.deepcopy(self.oldindiv)
-#        self.model.WA = []
-#
-#        initC = 0
-#        updateC = 0
-#
-#        descT = 0
-#        pertT = 0
-#        updatePertT = 0
-#        updateT = 0
-#        self.fitEval = 0
-#        walkLen = 10
-#
-#        initT = os.times()[0] - start
-#        while self.fitEval < self.MaxFit:
-#            start = os.times()[0]
-#            improveN, bestI = self.nextDesc()
-#            descT = descT + os.times()[0] - start
-#
-#            if improveN == False:
-#                initC = initC + 1
-#                if restart == True:
-#
-#                    start = os.times()[0]
-#                    diff = self.walk(fitName, minimize, walkLen)
-#                    pertT = pertT + os.times()[0] - start
-#
-#                    start = os.times()[0]
-#                    for i in diff:
-#                        self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[i] 
-#                        self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sumC(self.sumArr, self.dim))
-#
-#                        self.update(i)
-#                        self.updateSC(i)
-#                        self.updateWAS(i)
-#                        self.updatePertImprSC(i, minimize)
-#                    updatePertT = updatePertT + os.times()[0] - start
-#
-#                    self.fitEval = self.fitEval + len(diff)
-#                else:
-#                    return { 'nEvals': self.fitEval, 'sol': self.oldindiv.fit, 'fitG': self.oldindiv.fitG, 'bit':self.oldindiv.bit}
-#            else : # improveN is TRUE 
-#                start = os.times()[0]
-#                self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[bestI] 
-#                self.oldindiv.fitG = self.oldindiv.fit - 2/float(self.dim) * (sumC(self.sumArr,self.im))
-#                self.update(bestI)
-#                self.updateSC(bestI)
-#                self.updateWAS(bestI)
-#                self.updateImprSC(bestI, minimize)
-#                self.fitEval = self.fitEval + 1
-#                updateT = updateT + os.times()[0] - start
-#                updateC = updateC + 1
-#                if self.oldindiv.bit[bestI] == '1':
-#                    self.oldindiv.bit[bestI] = '0'
-#                else:
-#                    self.oldindiv.bit[bestI] = '1'
-#
-#        return {'nEvals': self.fitEval, 'sol': self.bsf.fit, 'fitG': self.bsf.fitG, 'bit':self.bsf.bit,'init':initT, 'descT':descT, 'pertT':pertT, 'updateT':updateT, 'updatePertT':updatePertT, 'initC':initC, 'updateC':updateC}
-
     cdef walk(self, fitName, minimize, length):
         # update the bsf solution
         if fitName == 'fit' and minimize == True :
@@ -271,19 +203,8 @@ cdef class LocalSearch:
         return flipBits
 
 
-    def neighbors(self):
-        neighs = []
-        for j in xrange(self.dim):
-            # flip the jth bit in bit-string
-            neighStr = np.copy(self.oldindiv.bit)
-            if neighStr[j] == '1':
-                neighStr[j] = '0'
-            else:
-                neighStr[j] = '1'
-            neighs.append( neighStr )
-        return np.array(neighs)
 
-    def evalPop(self, Indiv indiv):
+    cdef evalPop(self, Indiv indiv):
         indiv.fit = self.func(indiv.bit)
         self.fitEval = self.fitEval + 1
         return indiv
@@ -314,7 +235,7 @@ cdef class LocalSearch:
 
         return True, bestI
 
-    def initWal(self):
+    cdef initWal(self):
         """ 
         1. 
         compute the sum array for the first time, according to the initial solution
@@ -332,6 +253,7 @@ cdef class LocalSearch:
         cdef InTer* inter 
         cdef vector[InfBit]* vectPtr
         cdef InfBit* strPtr
+        cdef ComArr* comb
 
         cdef Was* was
 
@@ -353,8 +275,8 @@ cdef class LocalSearch:
         #self.WAS = np.tile(Was, len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
         self.WAS = <Was* > malloc(sizeof(Was)* len(self.model.w.keys()))
 
-
-        self.lookup = dict()
+#        self.lookup = dict()
+        self.lookup = new map[int,ComArr*]() 
 
         for i in xrange(self.dim):
             # initialize sumArr
@@ -437,9 +359,14 @@ cdef class LocalSearch:
                     #print 'END  : self.infectBit[%d].push_back(strPtr[0])' %(j)
 #                print 'END  : self.model.WA[%d].arr' %(i)
 
-            for l in comb: # for each list in comb
-                j0 = self.model.WA[i].arr[int(l[0])]
-                j1 = self.model.WA[i].arr[int(l[1])]
+#            for l in comb: # for each list in comb
+#                j0 = self.model.WA[i].arr[int(l[0])]
+#                j1 = self.model.WA[i].arr[int(l[1])]
+#                self.C[j0][j1] = self.C[j0][j1] + W
+
+            for l in xrange(comb.size):
+                j0 = self.model.WA[i].arr[comb.arr[l][0]]
+                j1 = self.model.WA[i].arr[comb.arr[l][1]]
                 self.C[j0][j1] = self.C[j0][j1] + W
 
 
@@ -463,26 +390,40 @@ cdef class LocalSearch:
 #            self.lookup[N] = comb
 #            return comb
 
-    cdef genComb(self,N):
+    cdef ComArr* genComb(self,int N):
         """ 
-        Generate C_k^0 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
+        Generate C_N^2 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
         """
-        cdef int c, a, j
+        cdef int c, j, i, counter
+        cdef ComArr* ptr
+        cdef map[int, ComArr*].iterator it
+        cdef pair[int, ComArr*]* p
 
-        if N in self.lookup.keys(): # the key exists before
-            return self.lookup[N]
-        else : 
-            comb =  []
-            c = 0
-            for i in range(N):
-                for j in [ k for k in range(N) if k > i]:
-                    arr = np.zeros(2)
-                    arr[0] = i
-                    arr[1] = j
-                    comb.append(arr)
-                    c = c + 1    
-            self.lookup[N] = comb
-            return comb
+        it = self.lookup[0].find(N)
+
+        if it != self.lookup.end(): # the key exists before
+            return deref(it).second
+
+        else : # the key not found
+            c = biomial(N, 2)
+            counter = 0
+
+            ptr = <ComArr*> malloc(sizeof(ComArr))
+            ptr.arr = <int**> malloc(sizeof(int*)*c)
+            ptr.size = c
+
+            for i in xrange(c):
+                ptr.arr[i] = <int*> malloc(sizeof(int)*2)
+
+            for i in xrange(N):
+                for j in xrange(i+1,N):
+                    ptr.arr[counter][0] = i
+                    ptr.arr[counter][1] = j
+                    counter = counter + 1
+
+            p = new pair[int,ComArr *](N, ptr)
+            self.lookup.insert(p[0])
+            return ptr
 
 #    @cython.boundscheck(False)
     cdef update(self, int p):
@@ -541,9 +482,10 @@ cdef class LocalSearch:
 #                        k1 = arr[int(comb[k][1])]
 #                        self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[I.WI].w
                 comb = self.genComb(arr.size())
-                for k in xrange(len(comb)):
-                    k0 = arr[int(comb[k][0])]
-                    k1 = arr[int(comb[k][1])]
+                #for k in xrange(len(comb)):
+                for k in xrange(comb.size):
+                    k0 = arr[int(comb.arr[k][0])]
+                    k1 = arr[int(comb.arr[k][1])]
                     self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[I.WI].w
 
     cdef updateImprS(self, int p, bool minimize):
@@ -615,25 +557,6 @@ cdef class LocalSearch:
 #            for i in self.Inter[p].WI:
 #                self.WAS[i].w = - self.WAS[i].w
 
-    def neighWal(self):
-        """ 
-        generate neighborhoods and compute their fitnesses (mean of neighs) by Walsh Analysis
-        """
-        neighs = self.neighbors()
-        neighIndiv = np.tile(Struct(fit = 0, fitG=0, bit = '0' ), (self.dim))
-        for i in range(self.dim):
-            neighIndiv[i] = Struct(fit = 0, bit = neighs[i]) 
-        return neighIndiv
-
-    def neighFitWal(self):
-        """ 
-        generate neighborhoods and compute their fitnesses (real one) by Walsh Analysis
-        """
-        neighs = self.neighbors()
-        neighIndiv = np.tile(Struct(fit = 0,  bit = '0' ), (self.dim))
-        for i in range(self.dim):
-            neighIndiv[i] = Struct(fit = 0, bit = neighs[i]) 
-        return neighIndiv
 
     def printW(self):
         """
@@ -702,7 +625,7 @@ cdef class LocalSearch:
                 iters.append(list(j))
         return iters
 
-cpdef Indiv initIndiv(int dim):
+cdef Indiv initIndiv(int dim):
     """ initial the search inidividual with random bit string """
     cdef char *randBitStr = <char*>malloc(dim+1 * sizeof(char))
     for j in xrange(dim):
@@ -716,18 +639,6 @@ cpdef Indiv initIndiv(int dim):
     cdef Indiv indiv = Indiv()
     indiv.bit = randBitStr
     indiv.fit = 0
-    return indiv
-
-def initIndivNeigh(int dim):
-    """ initial the search inidividual with random bit string """
-    indiv = Struct(fit = 0, fitG = 0, bit = '0') 
-    randBitStr = []
-    for j in xrange(dim):
-        if random.random()<0.5:
-            randBitStr.append('0')
-        else:
-            randBitStr.append('1')
-    indiv = Struct( fit = 0, fitG = 0, bit = randBitStr)
     return indiv
 
 cdef int binCount(list arr,str bit):
@@ -748,3 +659,14 @@ cdef double sumC(double * a, int d):
         s = s+a[i]
 
     return s
+
+cdef int biomial(int N, int K):
+    """ compute the combination of N choose K """
+    return factorial(N)/( factorial(K) * factorial(N-K) )
+
+cdef int factorial(int N):
+    """ compute N! """
+    cdef int c, fact = 1
+    for c in xrange(1,N+1):
+        fact = fact*c
+    return fact
