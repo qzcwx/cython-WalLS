@@ -19,6 +19,7 @@ cimport cython
 from cython.parallel import prange, parallel, threadid
 
 from libcpp.vector cimport vector
+from libcpp.set cimport set
 from libc.stdlib cimport malloc
 from cython.operator cimport dereference as deref, preincrement as inc
 
@@ -35,22 +36,21 @@ ctypedef struct InfBit:
     vector[int]* arr
     int WI
 
-cdef class InTer:
-    cdef public list arr
-    cdef public list WI
-
-#cdef class Was:
+#cdef class InTer:
 #    cdef public list arr
-#    cdef public double w
+#    cdef public list WI
+
+ctypedef struct InTer:
+    set[int]* arr
+    set[int]* WI
 
 ctypedef struct Was:
     int* arr
     double w
-#    cdef public list arr
-#    cdef public double w
 
 cdef class LocalSearch:
-    cdef list Inter
+    #cdef list Inter
+    cdef InTer** Inter
     cdef vector[InfBit]** infectBit
     cdef Was* WAS
     cdef double* sumArr
@@ -117,6 +117,8 @@ cdef class LocalSearch:
         while self.fitEval < self.MaxFit:
             start = os.times()[0]
             improveN, bestI = self.nextDesc()
+#            print improveN, bestI
+#            print self.improveA
             descT = descT + os.times()[0] - start
 
             if improveN == False:
@@ -132,7 +134,11 @@ cdef class LocalSearch:
                         self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[i]
                         self.update(i)
                         self.updateWAS(i)
+                        #print 'BEGIN: updatePertImprS'
                         self.updatePertImprS(i, minimize)
+                        #print self.improveA
+                        #print 'END  : updatePertImprS'
+
                     updatePertT = updatePertT + os.times()[0] - start
                     self.fitEval = self.fitEval + len(diff)
                 else:
@@ -140,13 +146,16 @@ cdef class LocalSearch:
             else : # improveN is TRUE 
                 start = os.times()[0]
                 self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[bestI]
-#                print 'BEGIN: update'
+#                print 'BEGIN: update', bestI
                 self.update(bestI)
 #                print 'END  : update'
 #                print 'BEGIN: updateWAS'
                 self.updateWAS(bestI)
-                #print 'END  : updateWAS'
+#                print 'END  : updateWAS'
+#                print 'BEGIN: updateImprS'
                 self.updateImprS(bestI, minimize)
+#                print self.improveA
+#                print 'END  : updateImprS'
                 self.fitEval = self.fitEval + 1
                 updateT = updateT + os.times()[0] - start
                 updateC = updateC + 1
@@ -338,53 +347,6 @@ cdef class LocalSearch:
 
         return True, bestI
 
-#    def genImproveSC(self,minimize):
-#        """
-#        generate the index of best neigh according to {S_p(X)-2/N \Sigma_{i=1}^{N}C_{ip}(X)} only (surrogate of fitness)
-#        """
-#        # check improving move 
-#        self.improveA = []
-#        for i in range(self.dim):
-#            if (minimize == True and self.SC[i] > self.threshold) or (minimize == False and self.SC[i]<self.threshold):
-#                self.improveA.append(i)
-
-
-#    def genMeanNext(self,minimize):
-#        """
-#        generate the index of next improving neigh according to {S_p(X)-2/N \Sigma_{i=1}^{N}C_{ip}(X)} only (surrogate of fitness)
-#        """
-#        # check improving move 
-#        improve = False
-#        self.improveA = []
-#        for i in range(self.dim):
-#            if (minimize == True and self.SC[i] > self.threshold) or (minimize == False and self.SC[i]<self.threshold):
-#                self.improveA.append(i)
-#                improve = True
-#
-#        if improve == False:
-#            return False, None
-#
-#        bestI = random.choice(self.improveA)
-#        return True, bestI
-#
-#
-#    def updateMeanNext(self, p, minimize):
-#        self.improveA.remove(p)
-#
-#        if p in self.Inter:
-#            for i in self.Inter[p].arr:
-#                if (minimize == True and self.SC[i] > self.threshold) or (minimize == False and self.SC[i]<self.threshold):
-#                    if i not in self.improveA:
-#                        self.improveA.append(i)
-#                elif i in self.improveA:
-#                    self.improveA.remove(i)
-#
-#        if not self.improveA:
-#            return False, None
-#
-#        bestI = random.choice(self.improveA)
-#        return True, bestI
-
     def initWal(self):
         """ 
         1. 
@@ -400,7 +362,7 @@ cdef class LocalSearch:
         initialize a dict() of interaction structure, where interactive bits and the index of WAS (walsh including sign)
         """
         cdef int i,j,k
-        cdef InTer inter 
+        cdef InTer* inter 
         cdef vector[InfBit]* vectPtr
         cdef InfBit* strPtr
 
@@ -431,8 +393,10 @@ cdef class LocalSearch:
             # initialize sumArr
             self.sumArr[i] = 0
 
-        #self.infectBit = [[] for i in range(self.dim)]
-        self.Inter = [[] for i in range(self.dim)]
+#        self.Inter = [[] for i in range(self.dim)]
+        self.Inter = < InTer** > malloc(sizeof(void *)*self.dim)
+        for i in xrange(self.dim):
+            self.Inter[i] = NULL
         
         for i in xrange(self.dim):
             for j in xrange(self.dim):
@@ -445,10 +409,10 @@ cdef class LocalSearch:
 #            self.WAS[i].w = W
             
             was = <Was *>malloc(sizeof(Was))
-            was.arr = <int *>malloc(sizeof(int)*len(self.model.WA[i].arr))
+            was[0].arr = <int *>malloc(sizeof(int)*len(self.model.WA[i].arr))
             for j in xrange(len(self.model.WA[i].arr)):
-                was.arr[j] = self.model.WA[i].arr[j]
-            was.w = W
+                was[0].arr[j] = self.model.WA[i].arr[j]
+            was[0].w = W
             self.WAS[i] = was[0]
 
             comb = self.genComb(len(self.model.WA[i].arr))
@@ -456,19 +420,29 @@ cdef class LocalSearch:
             for j in self.model.WA[i].arr:
                 self.sumArr[j] = self.sumArr[j] + W
                 if len(self.model.WA[i].arr)>1: # for at least order Walsh terms
-                    if not self.Inter[j]: # the entry of i doesn't exist yet
-                        self.Inter[j] = InTer()
-                        self.Inter[j].arr = []
-                        self.Inter[j].WI = []
+                    #if not self.Inter[j]: # the entry of i doesn't exist yet
+                    if self.Inter[j] == NULL:
+#                        self.Inter[j] = InTer()
+#                        self.Inter[j].arr = []
+#                        self.Inter[j].WI = []
+                        inter = <InTer*> malloc(sizeof(InTer))
+                        inter[0].arr = new set[int]()
+                        inter[0].WI = new set[int]()
+                        self.Inter[j] = inter
+                        
+#                    for k in self.model.WA[i].arr:
+#                        if k != j and k not in self.Inter[j].arr:
+#                            self.Inter[j].arr.append(k)
+#                    if  i not in self.Inter[j].WI:
+#                        self.Inter[j].WI.append(i)
 
                     for k in self.model.WA[i].arr:
-                        if k != j and k not in self.Inter[j].arr:
-                            self.Inter[j].arr.append(k)
-                    if  i not in self.Inter[j].WI:
-                        self.Inter[j].WI.append(i)
+                        if k != j :
+                            self.Inter[j].arr.insert(k)
+                    self.Inter[j].WI.insert(i)
+
 
 #                print 'BEGIN: self.model.WA[%d].arr' %(i)
-
                 # add list of order >= 3 Walsh terms for the purpose of updating C matrix
                 if len(self.model.WA[i].arr) >= 3:
 #                    infBit = InfBit()
@@ -522,8 +496,9 @@ cdef class LocalSearch:
             self.lookup[N] = comb
             return comb
 
-    @cython.wraparound(False)
-    @cython.boundscheck(False)
+#    @cython.wraparound(False)
+#    @cython.boundscheck(False)
+
     def update(self, int p):
         """
         By keeping track of coincidence matrix, 
@@ -532,28 +507,29 @@ cdef class LocalSearch:
         """
         self.sumArr[p] = - self.sumArr[p]
         #cdef int k, k0, k1, i, ii, len1, len2
-        cdef int i
-        cdef int k, k0, k1, ii
+        cdef int i,ii
         cdef int len1
         cdef list comb
-        #cdef np.ndarray[np.int64_t, ndim=1] InterArr
-        #cdef np.ndarray[np.long, ndim=1] InterArr
+        cdef set[int].iterator it
 
-        if self.Inter[p]:
+        if self.Inter[p]!=NULL:
+            """ iterative over self.Inter[p].arr """
+            #print 'Not NULL', p
             #for i in prange(len(self.Inter[p].arr), nogil= True):
-            len1 = len(self.Inter[p].arr)
-            #InterArr =  np.asarray(self.Inter[p].arr)
-            #for i in prange(len1, nogil= True):
-            for i in xrange(len1):
-            #for i in xrange(len(self.Inter[p].arr)):
-                #ii = InterArr[i] 
-                ii = self.Inter[p].arr[i] 
+            it = self.Inter[p].arr.begin()
+            #print 'begin'
+            while it != self.Inter[p].arr.end():
+                ii = deref(it)
+                #print ii
                 if ii < p:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii][p]
                     self.C[ii][p] = - self.C[ii][p]
                 else:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[p][ii]
                     self.C[p][ii] = - self.C[p][ii]
+                inc(it)
+            
+
 #        print 'BEGIN: updateDeep'
         self.updateDeep(p)
 #        print 'END  : updateDeep'
@@ -598,26 +574,52 @@ cdef class LocalSearch:
 
     def updateImprS(self, int p, bool minimize):
         cdef int i,I
+        cdef set[int].iterator it
+
         self.improveA.remove(p)
-        if  self.Inter[p]:
-            for i in xrange(len(self.Inter[p].arr)): 
-                I = self.Inter[p].arr[i]
+        if  self.Inter[p]!=NULL:
+
+            it = self.Inter[p].arr.begin()
+            while it != self.Inter[p].arr.end():
+                I = deref(it)
                 if (minimize == True and self.sumArr[I] > self.threshold) or (minimize == False and self.sumArr[I]< self.threshold ):
                     if I not in self.improveA:
                         self.improveA.append(I)
                 elif I in self.improveA:
                     self.improveA.remove(I)
+                inc(it)
+
+
+#            for i in xrange(len(self.Inter[p].arr)): 
+#                I = self.Inter[p].arr[i]
+#                if (minimize == True and self.sumArr[I] > self.threshold) or (minimize == False and self.sumArr[I]< self.threshold ):
+#                    if I not in self.improveA:
+#                        self.improveA.append(I)
+#                elif I in self.improveA:
+#                    self.improveA.remove(I)
 
     def updatePertImprS(self, int p, bool minimize):
         cdef int i,I
-        if  self.Inter[p]:
-            for i in xrange(len(self.Inter[p].arr)): 
-                I = self.Inter[p].arr[i]
+        cdef set[int].iterator it
+
+        if  self.Inter[p]!=NULL:
+            it = self.Inter[p].arr.begin()
+            while it != self.Inter[p].arr.end():
+                I = deref(it)
                 if (minimize == True and self.sumArr[I] > self.threshold) or (minimize == False and self.sumArr[I]< self.threshold ):
                     if I not in self.improveA:
                         self.improveA.append(I)
                 elif I in self.improveA:
                     self.improveA.remove(I)
+                inc(it)
+
+#            for i in xrange(len(self.Inter[p].arr)): 
+#                I = self.Inter[p].arr[i]
+#                if (minimize == True and self.sumArr[I] > self.threshold) or (minimize == False and self.sumArr[I]< self.threshold ):
+#                    if I not in self.improveA:
+#                        self.improveA.append(I)
+#                elif I in self.improveA:
+#                    self.improveA.remove(I)
 
         if (minimize == True and self.sumArr[p] > self.threshold) or (minimize == False and self.sumArr[p]< self.threshold ):
             if p not in self.improveA:
@@ -627,9 +629,17 @@ cdef class LocalSearch:
 
     def updateWAS(self, int p):
         cdef int i, I
-        if self.Inter[p]:
-            for i in self.Inter[p].WI:
+        cdef set[int].iterator it
+
+        if self.Inter[p]!=NULL:
+            it = self.Inter[p].WI.begin()
+            while it != self.Inter[p].WI.end():
+                i = deref(it)
                 self.WAS[i].w = - self.WAS[i].w
+                inc(it)
+
+#            for i in self.Inter[p].WI:
+#                self.WAS[i].w = - self.WAS[i].w
 
     def neighWal(self):
         """ 
@@ -692,9 +702,9 @@ cdef class LocalSearch:
             print 
         print c,a, c/float(a)
 
-    def printInter(self):
-        for i in self.Inter:
-            print i,self.Inter[i].arr
+#    def printInter(self):
+#        for i in self.Inter:
+#            print i,self.Inter[i].arr
 
     def genCombOne(self, odd, order):
         """ generate the number of possible ones, 
