@@ -498,10 +498,8 @@ cdef class LocalSearch:
             self.lookup[N] = comb
             return comb
 
-#    @cython.wraparound(False)
 #    @cython.boundscheck(False)
-
-    def update(self, int p):
+    cdef update(self, int p):
         """
         By keeping track of coincidence matrix, 
         Cij stands for S_i(y_j) = S_i(x) - C_ij
@@ -532,14 +530,16 @@ cdef class LocalSearch:
                 inc(it)
             
 
-    def updateDeep(self, int p):
-        cdef int i 
+    @cython.wraparound(False)
+    cdef updateDeep(self, int p):
+        cdef int i, k0, k1
         cdef vector[int].iterator it
         cdef vector[int] arr
         cdef InfBit I
 
         # update the rest of elements in C matrix
         if self.infectBit[p].size() != 0:
+#            for i in prange(self.infectBit[p].size(), nogil=True):
             for i in xrange(self.infectBit[p].size()):
                 I = self.infectBit[p][0][i]
                 arr = I.arr[0]
@@ -549,14 +549,19 @@ cdef class LocalSearch:
                         arr.erase(it)
                         break
                     inc(it)
-
+#                with gil:
+#                    comb = self.genComb(arr.size())
+#                    for k in xrange(len(comb)):
+#                        k0 = arr[int(comb[k][0])]
+#                        k1 = arr[int(comb[k][1])]
+#                        self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[I.WI].w
                 comb = self.genComb(arr.size())
                 for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
                     self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[I.WI].w
 
-    def updateImprS(self, int p, bool minimize):
+    cdef updateImprS(self, int p, bool minimize):
         cdef int i,I
         cdef set[int].iterator it
 
@@ -582,7 +587,7 @@ cdef class LocalSearch:
 #                elif I in self.improveA:
 #                    self.improveA.remove(I)
 
-    def updatePertImprS(self, int p, bool minimize):
+    cdef updatePertImprS(self, int p, bool minimize):
         cdef int i,I
         cdef set[int].iterator it
 
