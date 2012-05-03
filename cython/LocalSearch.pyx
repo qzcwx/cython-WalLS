@@ -39,13 +39,20 @@ cdef class InTer:
     cdef public list arr
     cdef public list WI
 
-cdef class Was:
-    cdef public list arr
-    cdef public double w
+#cdef class Was:
+#    cdef public list arr
+#    cdef public double w
+
+ctypedef struct Was:
+    int* arr
+    double w
+#    cdef public list arr
+#    cdef public double w
 
 cdef class LocalSearch:
     cdef list Inter
     cdef vector[InfBit]** infectBit
+    cdef Was* WAS
     cdef double* sumArr
     cdef double** C
     cdef list improveA
@@ -55,7 +62,6 @@ cdef class LocalSearch:
     cdef int dim
     cdef double threshold
     cdef int fitEval
-    cdef np.ndarray WAS
     cdef dict lookup
     cdef Indiv oldindiv, bsf
 
@@ -397,26 +403,28 @@ cdef class LocalSearch:
         cdef InTer inter 
         cdef vector[InfBit]* vectPtr
         cdef InfBit* strPtr
-        cdef Was was
+
+        cdef Was* was
+
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
 
         # allocate total space for storing pointers
-#        print 'BEGIN: allocation'
         self.infectBit = < vector[InfBit]** > malloc(sizeof(void *) * self.dim)
         for i in xrange(self.dim):
             # assign pointers to the allocated space
             vectPtr = new vector[InfBit]()
             self.infectBit[i] = vectPtr
-#            print self.infectBit[i][0].size(), self.infectBit[i].size(), vectPtr.size()
-#        print 'END  : allocation'
 
 
         self.C = <double **>malloc(sizeof(double *) * self.dim)
         for i in xrange(self.dim) :
             self.C[i] = <double *> malloc(sizeof(double) * self.dim)
 
-        self.WAS = np.tile(Was, len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
+        #self.WAS = np.tile(Was, len(self.model.w.keys())) # Walsh coefficients with sign, represented in Array
+        self.WAS = <Was* > malloc(sizeof(Was)* len(self.model.w.keys()))
+
+
         self.lookup = dict()
 
         for i in xrange(self.dim):
@@ -432,9 +440,17 @@ cdef class LocalSearch:
         for i in xrange(len(self.model.WA)):
             W = int(math.pow(-1, binCount(self.model.WA[i].arr, self.oldindiv.bit))) * self.model.WA[i].w
             #self.WAS[i] = Struct(arr = self.model.WA[i].arr, w = W)
-            self.WAS[i] = Was()
-            self.WAS[i].arr = self.model.WA[i].arr
-            self.WAS[i].w = W
+#            self.WAS[i] = Was()
+#            self.WAS[i].arr = self.model.WA[i].arr
+#            self.WAS[i].w = W
+            
+            was = <Was *>malloc(sizeof(Was))
+            was.arr = <int *>malloc(sizeof(int)*len(self.model.WA[i].arr))
+            for j in xrange(len(self.model.WA[i].arr)):
+                was.arr[j] = self.model.WA[i].arr[j]
+            was.w = W
+            self.WAS[i] = was[0]
+
             comb = self.genComb(len(self.model.WA[i].arr))
 
             for j in self.model.WA[i].arr:
@@ -486,34 +502,6 @@ cdef class LocalSearch:
                 self.C[j0][j1] = self.C[j0][j1] + W
 
 
-#    def initSC(self):
-#        # compute the SC array
-#        self.SC = np.zeros(self.dim)
-#        self.Z = np.zeros(self.dim)
-#        self.orderC = np.zeros((self.dim,self.dim))
-#
-#        for p in range(self.dim):
-#
-#            phi = np.zeros(self.model.k+1)
-#            if p in self.Inter:
-#                for i in self.Inter[p].WI:
-#                    order = len(self.WAS[i].arr)
-#                    phi[order-1] = phi[order-1] + self.WAS[i].w
-#
-#            self.Z[p] = self.sumArr[p]
-#            for i in range(1, self.model.k+1):
-#                if phi[i] != 0:
-#                    self.Z[p] = self.Z[p] + i * phi[i]
-#
-#            self.SC[p] = self.sumArr[p] - 2/float(self.dim) * self.Z[p]
-#
-#        for i in range(len(self.WAS)):
-#            lenArr = len(self.WAS[i].arr)
-#            comb = self.genComb(lenArr)
-#            for j in comb:
-#                j0 = self.WAS[i].arr[int(j[0])]
-#                j1 = self.WAS[i].arr[int(j[1])]
-#                self.orderC[j0,j1] = self.orderC[j0,j1] + lenArr * self.WAS[i].w
 
     def genComb(self,N):
         """ 
@@ -642,65 +630,6 @@ cdef class LocalSearch:
         if self.Inter[p]:
             for i in self.Inter[p].WI:
                 self.WAS[i].w = - self.WAS[i].w
-
-#    def updateSC(self, p):
-#        self.SC[p] = - self.SC[p]
-#        self.Z[p] = - self.Z[p]
-#        cdef InfBit I
-#
-#        #update Z array
-#        if p in self.Inter:
-#            for i in self.Inter[p].arr:
-#                if i < p :
-#                    self.Z[i] = self.Z[i]  - 2* self.orderC[i,p]
-#                    self.orderC[i,p] = - self.orderC[i,p]
-#                else :
-#                    self.Z[i] = self.Z[i]  - 2* self.orderC[p,i]
-#                    self.orderC[p,i] = - self.orderC[p,i]
-#                self.SC[i] = self.sumArr[i] - 2/float(self.dim) * self.Z[i]
-
-#        if p in self.infectBit.keys():
-#        if self.infectBit[p].size()!=0:
-#            for i in xrange(self.infectBit[p].size()):
-#                I = self.infectBit[p][0][i]
-#                arr = I.arr[0]
-#
-#                # arr.remove(p)
-#                it = arr.begin()
-#                while it != arr.end():
-#                    if deref(it) == p:
-#                        arr.erase(it)
-#                        inc(it)
-#
-#                comb = self.genComb(arr.size())
-#                for k in xrange(len(comb)):
-#                    k0 = arr[int(comb[k][0])]
-#                    k1 = arr[int(comb[k][1])]
-#                    self.orderC[k0,k1] = self.orderC[k0,k1] - 2 * (arr.size() + 1)* self.WAS[i.WI].w
-
-#    def updateImprSC(self, p, minimize):
-#        self.improveA.remove(p)
-#        if p in self.Inter:
-#            for i in self.Inter[p].arr:
-#                if (minimize == True and self.SC[i] > self.threshold) or (minimize == False and self.SC[i]<self.threshold):
-#                    if i not in self.improveA:
-#                        self.improveA.append(i)
-#                elif i in self.improveA:
-#                    self.improveA.remove(i)
-#
-#    def updatePertImprSC(self, p, minimize):
-#        if p in self.Inter:
-#            for i in self.Inter[p].arr:
-#                if (minimize == True and self.SC[i] > self.threshold) or (minimize == False and self.SC[i]<self.threshold):
-#                    if i not in self.improveA:
-#                        self.improveA.append(i)
-#                elif i in self.improveA:
-#                    self.improveA.remove(i)
-#        if (minimize == True and self.SC[p] > self.threshold) or (minimize == False and self.SC[p]<self.threshold):
-#            if p not in self.improveA:
-#                self.improveA.append(p)
-#        elif p in self.improveA:
-#            self.improveA.remove(p)
 
     def neighWal(self):
         """ 
