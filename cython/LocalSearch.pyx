@@ -532,40 +532,23 @@ cdef class LocalSearch:
                 inc(it)
             
 
-#        print 'BEGIN: updateDeep'
-#        print 'END  : updateDeep'
-
     def updateDeep(self, int p):
         cdef int i 
         cdef vector[int].iterator it
         cdef vector[int] arr
         cdef InfBit I
-#        print 'p', p
 
         # update the rest of elements in C matrix
         if self.infectBit[p].size() != 0:
-            #len2 = len(self.infectBit[p])
-            #for i in prange(len2, nogil= True):
-            #for i in xrange(len(self.infectBit[p])):
             for i in xrange(self.infectBit[p].size()):
                 I = self.infectBit[p][0][i]
                 arr = I.arr[0]
-#                for i in xrange(arr.size()):
-#                    print arr[i]
-#                print 'end', deref(arr.end())
-
-                # arr.remove(p)
                 it = arr.begin()
                 while it != arr.end():
-#                    print deref(it)
                     if deref(it) == p:
                         arr.erase(it)
                         break
                     inc(it)
-#                for j in xrange(arr.size()): 
-#                    if arr[j] == p:
-#                        arr.erase(arr.begin()+j)
-#                        break
 
                 comb = self.genComb(arr.size())
                 for k in xrange(len(comb)):
