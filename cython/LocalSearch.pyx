@@ -1,4 +1,4 @@
-# cython: profile=True
+#cython: profile=True
 
 import numpy as np
 cimport numpy as np
@@ -18,13 +18,11 @@ from cpython cimport bool
 cimport cython
 from cython.parallel import prange, parallel, threadid
 
+from libcpp.vector cimport vector
+from libc.stdlib cimport malloc
+from cython.operator cimport dereference as deref, preincrement as inc
+
 # standard cimport file libc/stdlib.pxd
-
-cdef extern from "stdlib.h":
-    void free(void* ptr)
-    void* malloc(size_t size)
-    void* realloc(void* ptr, size_t size)
-
 class Struct:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
@@ -33,9 +31,9 @@ cdef class Indiv:
     cdef public char* bit
     cdef public double fit
 
-cdef class InfBit:
-    cdef public list arr
-    cdef public int WI
+ctypedef struct InfBit:
+    vector[int]* arr
+    int WI
 
 cdef class InTer:
     cdef public list arr
@@ -46,7 +44,8 @@ cdef class Was:
     cdef public double w
 
 cdef class LocalSearch:
-    cdef list infectBit, Inter
+    cdef list Inter
+    cdef vector[InfBit]** infectBit
     cdef double* sumArr
     cdef double** C
     cdef list improveA
@@ -97,13 +96,17 @@ cdef class LocalSearch:
         self.bsf = Indiv()
         self.bsf.bit = self.oldindiv.bit 
         self.bsf.fit = self.oldindiv.fit
+#        print 'BEGIN: InitWal'
         self.initWal()
+#        print 'END  : InitWal'
         self.genImproveS(minimize)
         self.model.WA = []
 
         self.fitEval = 0
 
         initT = os.times()[0] - start
+
+#        print 'BEGIN: search'
 
         while self.fitEval < self.MaxFit:
             start = os.times()[0]
@@ -131,8 +134,12 @@ cdef class LocalSearch:
             else : # improveN is TRUE 
                 start = os.times()[0]
                 self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[bestI]
+#                print 'BEGIN: update'
                 self.update(bestI)
+#                print 'END  : update'
+#                print 'BEGIN: updateWAS'
                 self.updateWAS(bestI)
+                #print 'END  : updateWAS'
                 self.updateImprS(bestI, minimize)
                 self.fitEval = self.fitEval + 1
                 updateT = updateT + os.times()[0] - start
@@ -141,6 +148,7 @@ cdef class LocalSearch:
                     self.oldindiv.bit[bestI] = '0'
                 else:
                     self.oldindiv.bit[bestI] = '1'
+#            print 'END  : search'
         return {'nEvals': self.fitEval, 'sol': self.bsf.fit, 'bit':self.bsf.bit, 'init':initT, 'descT':descT, 'pertT':pertT, 'updateT':updateT, 'updatePertT':updatePertT, 'initC':initC, 'updateC':updateC}
 
 
@@ -387,14 +395,25 @@ cdef class LocalSearch:
         initialize a dict() of interaction structure, where interactive bits and the index of WAS (walsh including sign)
         """
         cdef int i,j,k
-        cdef InfBit infBit
         cdef InTer inter 
+        cdef vector[InfBit]* vectPtr
+        cdef InfBit* strPtr
         cdef Was was
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
 
-        self.C = <double **>malloc(sizeof(double *) * self.dim)
+        # allocate total space for storing pointers
+#        print 'BEGIN: allocation'
+        self.infectBit = < vector[InfBit]** > malloc(sizeof(void *) * self.dim)
+        for i in xrange(self.dim):
+            # assign pointers to the allocated space
+            vectPtr = new vector[InfBit]()
+            self.infectBit[i] = vectPtr
+#            print self.infectBit[i][0].size(), self.infectBit[i].size(), vectPtr.size()
+#        print 'END  : allocation'
 
+
+        self.C = <double **>malloc(sizeof(double *) * self.dim)
         for i in xrange(self.dim) :
             self.C[i] = <double *> malloc(sizeof(double) * self.dim)
 
@@ -406,7 +425,7 @@ cdef class LocalSearch:
             # initialize sumArr
             self.sumArr[i] = 0
 
-        self.infectBit = [[] for i in range(self.dim)]
+        #self.infectBit = [[] for i in range(self.dim)]
         self.Inter = [[] for i in range(self.dim)]
         
         for i in xrange(self.dim):
@@ -434,15 +453,34 @@ cdef class LocalSearch:
                     if  i not in self.Inter[j].WI:
                         self.Inter[j].WI.append(i)
 
+#                print 'BEGIN: self.model.WA[%d].arr' %(i)
+
                 # add list of order >= 3 Walsh terms for the purpose of updating C matrix
                 if len(self.model.WA[i].arr) >= 3:
-                    infBit = InfBit()
-                    infBit.arr = self.model.WA[i].arr
-                    infBit.WI = i
-                    if not self.infectBit[j]: 
-                        self.infectBit[j] = [infBit]
-                    else :
-                        self.infectBit[j].append(infBit)
+#                    infBit = InfBit()
+#                    infBit.arr = self.model.WA[i].arr
+#                    infBit.WI = i
+
+                    strPtr = <InfBit *> malloc(sizeof(InfBit))
+                    strPtr.WI = i
+#                    strPtr.arr = <vector[int]*> malloc(sizeof(vector[int]))
+                    #print strPtr.WI, strPtr.arr[0].size(), strPtr.arr.size()
+                    strPtr.arr = new vector[int]()
+                    for k in self.model.WA[i].arr:
+                    #    print 'BEGIN: strPtr.arr.push_back(%d)' %(k)
+                        strPtr.arr[0].push_back(k)
+                    #    print strPtr.arr[0].size(), strPtr.arr.size()
+#                        print 'END  : strPtr.arr.push_back(%d)' %(k)
+
+#                    if not self.infectBit[j]: 
+#                        self.infectBit[j] = [infBit]
+#                    else :
+#                        self.infectBit[j].append(infBit)
+                    
+                    #print 'BEGIN: self.infectBit[%d].push_back(strPtr[0])' %(j)
+                    self.infectBit[j][0].push_back(strPtr[0])
+                    #print 'END  : self.infectBit[%d].push_back(strPtr[0])' %(j)
+#                print 'END  : self.model.WA[%d].arr' %(i)
 
             for l in comb: # for each list in comb
                 j0 = self.model.WA[i].arr[int(l[0])]
@@ -500,7 +538,7 @@ cdef class LocalSearch:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    def update(self,int p):
+    def update(self, int p):
         """
         By keeping track of coincidence matrix, 
         Cij stands for S_i(y_j) = S_i(x) - C_ij
@@ -510,41 +548,63 @@ cdef class LocalSearch:
         #cdef int k, k0, k1, i, ii, len1, len2
         cdef int i
         cdef int k, k0, k1, ii
-        #cdef int len1, len2
+        cdef int len1
         cdef list comb
-        cdef np.ndarray[np.int64_t, ndim=1] InterArr
+        #cdef np.ndarray[np.int64_t, ndim=1] InterArr
+        #cdef np.ndarray[np.long, ndim=1] InterArr
 
         if self.Inter[p]:
             #for i in prange(len(self.Inter[p].arr), nogil= True):
             len1 = len(self.Inter[p].arr)
-            InterArr =  np.asarray(self.Inter[p].arr)
-            for i in prange(len1, nogil= True):
-            #for i in xrange(len1):
+            #InterArr =  np.asarray(self.Inter[p].arr)
+            #for i in prange(len1, nogil= True):
+            for i in xrange(len1):
             #for i in xrange(len(self.Inter[p].arr)):
-                ii = InterArr[i] 
-                #ii = self.Inter[p].arr[i] 
+                #ii = InterArr[i] 
+                ii = self.Inter[p].arr[i] 
                 if ii < p:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[ii][p]
                     self.C[ii][p] = - self.C[ii][p]
                 else:
                     self.sumArr[ii] = self.sumArr[ii] - 2*self.C[p][ii]
                     self.C[p][ii] = - self.C[p][ii]
+#        print 'BEGIN: updateDeep'
         self.updateDeep(p)
+#        print 'END  : updateDeep'
 
     def updateDeep(self, int p):
-        cdef int i
-        cdef list arr
+        cdef int i 
+        cdef vector[int].iterator it
+        cdef vector[int] arr
         cdef InfBit I
+#        print 'p', p
 
         # update the rest of elements in C matrix
-        if self.infectBit[p]:
+        if self.infectBit[p].size() != 0:
             #len2 = len(self.infectBit[p])
             #for i in prange(len2, nogil= True):
-            for i in xrange(len(self.infectBit[p])):
-                I = self.infectBit[p][i]
-                arr = I.arr[:]
-                arr.remove(p)
-                comb = self.genComb(len(arr))
+            #for i in xrange(len(self.infectBit[p])):
+            for i in xrange(self.infectBit[p].size()):
+                I = self.infectBit[p][0][i]
+                arr = I.arr[0]
+#                for i in xrange(arr.size()):
+#                    print arr[i]
+#                print 'end', deref(arr.end())
+
+                # arr.remove(p)
+                it = arr.begin()
+                while it != arr.end():
+#                    print deref(it)
+                    if deref(it) == p:
+                        arr.erase(it)
+                        break
+                    inc(it)
+#                for j in xrange(arr.size()): 
+#                    if arr[j] == p:
+#                        arr.erase(arr.begin()+j)
+#                        break
+
+                comb = self.genComb(arr.size())
                 for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
@@ -588,6 +648,7 @@ cdef class LocalSearch:
     def updateSC(self, p):
         self.SC[p] = - self.SC[p]
         self.Z[p] = - self.Z[p]
+        cdef InfBit I
 
         #update Z array
         if p in self.Inter:
@@ -600,16 +661,24 @@ cdef class LocalSearch:
                     self.orderC[p,i] = - self.orderC[p,i]
                 self.SC[i] = self.sumArr[i] - 2/float(self.dim) * self.Z[i]
 
-        if p in self.infectBit.keys():
-            for i in self.infectBit[p]:
-                arr = i.arr[:]
-                arr.remove(p)
-                lenArr = len(arr)
-                comb = self.genComb(lenArr)
+#        if p in self.infectBit.keys():
+        if self.infectBit[p].size()!=0:
+            for i in xrange(self.infectBit[p].size()):
+                I = self.infectBit[p][0][i]
+                arr = I.arr[0]
+
+                # arr.remove(p)
+                it = arr.begin()
+                while it != arr.end():
+                    if deref(it) == p:
+                        arr.erase(it)
+                        inc(it)
+
+                comb = self.genComb(arr.size())
                 for k in xrange(len(comb)):
                     k0 = arr[int(comb[k][0])]
                     k1 = arr[int(comb[k][1])]
-                    self.orderC[k0,k1] = self.orderC[k0,k1] - 2 * (lenArr + 1)* self.WAS[i.WI].w
+                    self.orderC[k0,k1] = self.orderC[k0,k1] - 2 * (arr.size() + 1)* self.WAS[i.WI].w
 
     def updateImprSC(self, p, minimize):
         self.improveA.remove(p)
