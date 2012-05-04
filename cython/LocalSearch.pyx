@@ -20,8 +20,8 @@ from cython.parallel import prange, parallel, threadid
 
 from libcpp.vector cimport vector
 from libcpp.set cimport set
-from libcpp.map cimport map
-from libcpp.pair cimport pair
+#from libcpp.map cimport map
+#from libcpp.pair cimport pair
 from libc.stdlib cimport malloc
 from cython.operator cimport dereference as deref, preincrement as inc
 
@@ -64,7 +64,7 @@ cdef class LocalSearch:
     cdef double threshold
     cdef int fitEval
     #cdef dict lookup
-    cdef map[int,ComArr*]* lookup
+    cdef ComArr** lookup
     cdef Indiv oldindiv, bsf
 
     def __init__(self,object model,int MaxFit,int dim):
@@ -259,6 +259,9 @@ cdef class LocalSearch:
 
         #self.sumArr = np.zeros(self.dim)
         self.sumArr = <double*>malloc(self.dim * sizeof(double))
+        for i in xrange(self.dim):
+            # initialize sumArr
+            self.sumArr[i] = 0
 
         # allocate total space for storing pointers
         self.infectBit = < vector[InfBit]** > malloc(sizeof(void *) * self.dim)
@@ -276,11 +279,11 @@ cdef class LocalSearch:
         self.WAS = <Was* > malloc(sizeof(Was)* len(self.model.w.keys()))
 
 #        self.lookup = dict()
-        self.lookup = new map[int,ComArr*]() 
-
+        #self.lookup = new map[int,ComArr*]() 
+        self.lookup = <ComArr**> malloc(sizeof(ComArr*)*self.dim)
         for i in xrange(self.dim):
-            # initialize sumArr
-            self.sumArr[i] = 0
+            self.lookup[i] = NULL
+
 
 #        self.Inter = [[] for i in range(self.dim)]
         self.Inter = < InTer** > malloc(sizeof(void *)*self.dim)
@@ -371,40 +374,57 @@ cdef class LocalSearch:
 
 
 
-#    def genComb(self,N):
+#    cdef ComArr* genComb(self,int N) nogil:
 #        """ 
-#        Generate C_k^0 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
+#        Generate C_N^2 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
 #        """
-#        if N in self.lookup.keys(): # the key exists before
-#            return self.lookup[N]
-#        else : 
-#            comb =  []
-#            c = 0
-#            for i in range(N):
-#                for j in [ k for k in range(N) if k > i]:
-#                    arr = np.zeros(2)
-#                    arr[0] = i
-#                    arr[1] = j
-#                    comb.append(arr)
-#                    c = c + 1    
-#            self.lookup[N] = comb
-#            return comb
+#        cdef int c, j, i, counter
+#        cdef ComArr* ptr
+#        cdef map[int, ComArr*].iterator it
+#        cdef pair[int, ComArr*]* p
+#
+#        it = self.lookup[0].find(N)
+#
+#        if it != self.lookup.end(): # the key exists before
+#            return deref(it).second
+#
+#        else : # the key not found
+#            c = biomial(N, 2)
+#            counter = 0
+#
+#            ptr = <ComArr*> malloc(sizeof(ComArr))
+#            ptr.arr = <int**> malloc(sizeof(int*)*c)
+#            ptr.size = c
+#
+#            for i in xrange(c):
+#                ptr.arr[i] = <int*> malloc(sizeof(int)*2)
+#
+#            for i in xrange(N):
+#                for j in xrange(i+1,N):
+#                    ptr.arr[counter][0] = i
+#                    ptr.arr[counter][1] = j
+#                    counter = counter + 1
+#
+#            p = new pair[int,ComArr *](N, ptr)
+#            self.lookup.insert(p[0])
+#            return ptr
 
-    cdef ComArr* genComb(self,int N):
+
+    #cdef ComArr* genComb(self,int N):
+    cdef ComArr* genComb(self,int N) nogil:
         """ 
         Generate C_N^2 sequence, index are stored, because they are more general, Implemented in an *incremental* fashion.
         """
         cdef int c, j, i, counter
         cdef ComArr* ptr
-        cdef map[int, ComArr*].iterator it
-        cdef pair[int, ComArr*]* p
 
-        it = self.lookup[0].find(N)
-
-        if it != self.lookup.end(): # the key exists before
-            return deref(it).second
-
+        if self.lookup[N] != NULL: # the key exists before
+#            print N
+#            print "exist"
+            return self.lookup[N]
         else : # the key not found
+#            print N
+#            print "not found"
             c = biomial(N, 2)
             counter = 0
 
@@ -420,9 +440,7 @@ cdef class LocalSearch:
                     ptr.arr[counter][0] = i
                     ptr.arr[counter][1] = j
                     counter = counter + 1
-
-            p = new pair[int,ComArr *](N, ptr)
-            self.lookup.insert(p[0])
+            self.lookup[N] = ptr
             return ptr
 
 #    @cython.boundscheck(False)
@@ -457,7 +475,7 @@ cdef class LocalSearch:
                 inc(it)
             
 
-    cdef updateDeep(self, int p):
+    cdef void updateDeep(self, int p):
         cdef int i, k0, k1
         cdef vector[int].iterator it
         cdef vector[int] arr
@@ -465,8 +483,8 @@ cdef class LocalSearch:
 
         # update the rest of elements in C matrix
         if self.infectBit[p].size() != 0:
-#            for i in prange(self.infectBit[p].size(), nogil=True):
-            for i in xrange(self.infectBit[p].size()):
+            for i in prange(self.infectBit[p].size(), nogil=True):
+#            for i in xrange(self.infectBit[p].size()):
                 I = self.infectBit[p][0][i]
                 arr = I.arr[0]
                 it = arr.begin()
@@ -482,7 +500,6 @@ cdef class LocalSearch:
 #                        k1 = arr[int(comb[k][1])]
 #                        self.C[k0][k1] = self.C[k0][k1] - 2 * self.WAS[I.WI].w
                 comb = self.genComb(arr.size())
-                #for k in xrange(len(comb)):
                 for k in xrange(comb.size):
                     k0 = arr[int(comb.arr[k][0])]
                     k1 = arr[int(comb.arr[k][1])]
@@ -660,11 +677,12 @@ cdef double sumC(double * a, int d):
 
     return s
 
-cdef int biomial(int N, int K):
+@cython.cdivision(True)
+cdef int biomial(int N, int K) nogil:
     """ compute the combination of N choose K """
     return factorial(N)/( factorial(K) * factorial(N-K) )
 
-cdef int factorial(int N):
+cdef int factorial(int N) nogil:
     """ compute N! """
     cdef int c, fact = 1
     for c in xrange(1,N+1):
