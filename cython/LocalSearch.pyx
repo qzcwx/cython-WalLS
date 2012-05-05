@@ -131,29 +131,30 @@ cdef class LocalSearch:
                     diff = self.walk(fitName, minimize, walkLen)
                     pertT = pertT + os.times()[0] - start
 
-                    start = os.times()[0]
                     for i in diff:
                         self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[i]
                         self.update(i)
+                        start = os.times()[0]
                         self.updateDeep(i)
+                        updateT = updateT + os.times()[0] - start
                         self.updateWAS(i)
                         #print 'BEGIN: updatePertImprS'
                         self.updatePertImprS(i, minimize)
                         #print self.improveA
                         #print 'END  : updatePertImprS'
 
-                    updatePertT = updatePertT + os.times()[0] - start
                     self.fitEval = self.fitEval + len(diff)
                 else:
                     return { 'nEvals': self.fitEval, 'sol': self.oldindiv.fit, 'bit':self.oldindiv.bit}
             else : # improveN is TRUE 
-                start = os.times()[0]
                 self.oldindiv.fit = self.oldindiv.fit - 2*self.sumArr[bestI]
 #                print 'BEGIN: update', bestI
                 self.update(bestI)
 #                print 'END  : update'
 #                print 'BEGIN: updateWAS'
+                start = os.times()[0]
                 self.updateDeep(bestI)
+                updateT = updateT + os.times()[0] - start
                 self.updateWAS(bestI)
 #                print 'END  : updateWAS'
 #                print 'BEGIN: updateImprS'
@@ -161,7 +162,6 @@ cdef class LocalSearch:
 #                print self.improveA
 #                print 'END  : updateImprS'
                 self.fitEval = self.fitEval + 1
-                updateT = updateT + os.times()[0] - start
                 updateC = updateC + 1
                 if self.oldindiv.bit[bestI] == '1':
                     self.oldindiv.bit[bestI] = '0'
